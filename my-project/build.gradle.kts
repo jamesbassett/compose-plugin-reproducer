@@ -43,7 +43,7 @@ dockerCompose {
             // ignore dependencies from included builds from the upTask shouldRunAfter dependencies
             // (comparing on projectDir may not be the best - is name reliable?)
             val includedBuildDirectories = gradle.includedBuilds.map { it.projectDir }
-            val filteredTaskDependencies = testTask.get().taskDependencies.getDependencies(null).filter {
+            val filteredTaskDependencies = taskDependencies.getDependencies(null).filter {
                 val includeTask = it.project.projectDir !in includedBuildDirectories
                 println("${ if (includeTask) "including" else "excluding"} task: ${it.path} from ${it.project.name}")
                 includeTask
