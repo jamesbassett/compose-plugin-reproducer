@@ -1,0 +1,5 @@
+services:
+  wiremock:
+    image: wiremock/wiremock:3.9.1
+    ports:
+      - "8080:8080"
