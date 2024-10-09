@@ -4,4 +4,8 @@ plugins {
 
 rootProject.name = "compose-plugin-reproducer"
 include("my-project")
+
 includeBuild("my-included-build")
+
+// replace the above with the following to use a normal (not composite) build
+//include("my-included-build")
