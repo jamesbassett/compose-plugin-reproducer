@@ -33,12 +33,23 @@ dockerCompose {
         // which includes the dependencies from the included build (which is not allowed)
         isRequiredBy(testTask)
     } else {
-        // simulate isRequiredBy but exclude the shouldRunAfter logic (this works)
+        // simulate isRequiredBy with modified shouldRunAfter logic (this works)
         val upTask = tasksConfigurator.upTask
         val downTask = tasksConfigurator.downTask
         testTask.configure {
             dependsOn(upTask)
             finalizedBy(downTask)
+
+            // ignore dependencies from included builds from the upTask shouldRunAfter dependencies
+            // (comparing on projectDir may not be the best - is name reliable?)
+            val includedBuildDirectories = gradle.includedBuilds.map { it.projectDir }
+            val filteredTaskDependencies = testTask.get().taskDependencies.getDependencies(null).filter {
+                val includeTask = it.project.projectDir !in includedBuildDirectories
+                println("${ if (includeTask) "including" else "excluding"} task: ${it.path} from ${it.project.name}")
+                includeTask
+            }
+
+            upTask.get().shouldRunAfter(filteredTaskDependencies)
         }
     }
 }

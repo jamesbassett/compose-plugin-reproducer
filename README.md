@@ -24,7 +24,7 @@ This issue seems to be caused by a combination of:
 
 ## Workaround
 
-To work around the issue, you can set up the task dependencies manually and avoid the use of `shouldRunAfter task.taskDependencies`,
-as is done in `my-project/build.gradle.kts`. This is not ideal (presumably this exists for a good reason - probably to stop composing up too early).
+To work around the issue, you can set up the task dependencies manually and filter out tasks from included builds instead of using `shouldRunAfter task.taskDependencies`,
+as is done in `my-project/build.gradle.kts`.
 
 You can see this workaround in action by running `./gradlew test -PenableWorkaround=true` from the root of the project.
