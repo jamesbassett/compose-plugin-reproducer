@@ -1,4 +1,5 @@
-import org.jetbrains.kotlin.cli.common.toBooleanLenient
+import com.avast.gradle.dockercompose.ComposeExtension
+import com.avast.gradle.dockercompose.TasksConfigurator
 
 plugins {
     kotlin("jvm") version "2.0.20"
@@ -28,34 +29,53 @@ val enableWorkaround: String? by project
 
 dockerCompose {
     val testTask = tasks.named<Test>("test")
-    if (!enableWorkaround.toBoolean()) {
-        // the normal syntax (this breaks because the compose plugin adds a "shouldRunAfter task.taskDependencies"
-        // which includes the dependencies from the included build (which is not allowed)
-        isRequiredBy(testTask)
-    } else {
-        // simulate isRequiredBy with modified shouldRunAfter logic (this works)
-        val upTask = tasksConfigurator.upTask
-        val downTask = tasksConfigurator.downTask
-        testTask.configure {
-            dependsOn(upTask)
-            finalizedBy(downTask)
-
-            // ignore dependencies from included builds from the upTask shouldRunAfter dependencies
-            // (comparing on projectDir may not be the best - is name reliable?)
-            val includedBuildDirectories = gradle.includedBuilds.map { it.projectDir }
-            val filteredTaskDependencies = taskDependencies.getDependencies(null).filter {
-                val includeTask = it.project.projectDir !in includedBuildDirectories
-                println("${ if (includeTask) "including" else "excluding"} task: ${it.path} from ${it.project.name}")
-                includeTask
-            }
-
-            upTask.get().shouldRunAfter(filteredTaskDependencies)
-        }
-    }
+    isRequiredBy(testTask, includedBuildWorkaround = enableWorkaround.toBoolean())
 }
 
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+/**
+ * A variant of isRequiredBy that can apply the workaround or delegate to the original implementation.
+ */
+fun <T: Task> ComposeExtension.isRequiredBy(taskProvider: TaskProvider<T>, includedBuildWorkaround: Boolean) {
+    if (includedBuildWorkaround) {
+        taskProvider.configure { tasksConfigurator.isRequiredByCoreWithIncludedBuildWorkaround(this, true) }
+    } else {
+        isRequiredBy(taskProvider)
+    }
+}
+
+/**
+ * A reimplementation of TaskConfigurator.isRequiredByCore() that filters out task dependencies from included builds.
+ * For the original see: https://github.com/avast/gradle-docker-compose-plugin/blob/main/src/main/groovy/com/avast/gradle/dockercompose/TasksConfigurator.groovy#L122-L132
+ */
+private fun TasksConfigurator.isRequiredByCoreWithIncludedBuildWorkaround(task: Task, fromConfigure: Boolean) {
+    task.dependsOn(upTask)
+    task.finalizedBy(downTask)
+
+    // ignore dependencies from included builds from the upTask shouldRunAfter dependencies
+    // (comparing on projectDir may not be the best - is name reliable?)
+    val includedBuildDirectories = gradle.includedBuilds.map { it.projectDir }
+    val filteredTaskDependencies = task.taskDependencies.getDependencies(null).filter {
+        val includeTask = it.project.projectDir !in includedBuildDirectories
+        println("${ if (includeTask) "including" else "excluding"} task: ${it.path} from ${it.project.name}")
+        includeTask
+    }
+
+    if (fromConfigure) {
+        upTask.get().shouldRunAfter(filteredTaskDependencies)
+    } else {
+        upTask.configure { shouldRunAfter(filteredTaskDependencies) }
+    }
+
+    (task as? ProcessForkOptions)?.let {
+        task.doFirst { composeSettings.exposeAsEnvironment(it) }
+    }
+    (task as? JavaForkOptions)?.let {
+        task.doFirst { composeSettings.exposeAsSystemProperties(it) }
     }
 }
